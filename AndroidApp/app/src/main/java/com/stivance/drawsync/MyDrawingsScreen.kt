@@ -1,5 +1,10 @@
 package com.stivance.drawsync
 
+import android.Manifest
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -46,8 +52,11 @@ fun MyDrawingsScreen(
     onOpenDrawing: (SavedDrawing) -> Unit
 ) {
 
-    val context =
-        androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
+
+    // =========================================================
+    // DRAWINGS
+    // =========================================================
 
     var drawings by remember {
         mutableStateOf(
@@ -60,6 +69,132 @@ fun MyDrawingsScreen(
     }
 
     // =========================================================
+    // BLUETOOTH MANAGER
+    // =========================================================
+
+    val bluetoothManager = remember {
+        BluetoothManager(context)
+    }
+
+    var bluetoothStatus by remember {
+        mutableStateOf(
+            bluetoothManager.getStatus()
+        )
+    }
+
+    // =========================================================
+    // DRAWING WAITING TO BE SENT
+    // =========================================================
+
+    var drawingWaitingForPermission by remember {
+        mutableStateOf<SavedDrawing?>(null)
+    }
+
+    // =========================================================
+    // BLUETOOTH PERMISSION LAUNCHER
+    // =========================================================
+
+    val bluetoothPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract =
+                ActivityResultContracts.RequestPermission()
+        ) { granted ->
+
+            val drawing =
+                drawingWaitingForPermission
+
+            drawingWaitingForPermission = null
+
+            if (granted) {
+
+                bluetoothStatus =
+                    bluetoothManager.getStatus()
+
+                if (
+                    drawing != null
+                ) {
+
+                    prepareDrawingForOled(
+                        context = context,
+                        drawing = drawing,
+                        bluetoothManager =
+                            bluetoothManager
+                    )
+                }
+
+            } else {
+
+                bluetoothStatus =
+                    bluetoothManager.getStatus()
+
+                Toast.makeText(
+                    context,
+                    "Bluetooth permission is required for OLED communication.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
+    // =========================================================
+    // REQUEST BLUETOOTH PERMISSION
+    // =========================================================
+
+    fun sendDrawingToOled(
+        drawing: SavedDrawing
+    ) {
+
+        /*
+         * Android 12 and newer require
+         * BLUETOOTH_CONNECT as a runtime permission.
+         *
+         * Android versions below 12 do not require
+         * this runtime permission.
+         */
+
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.S
+        ) {
+
+            val permission =
+                Manifest.permission.BLUETOOTH_CONNECT
+
+            val permissionGranted =
+                androidx.core.content.ContextCompat
+                    .checkSelfPermission(
+                        context,
+                        permission
+                    ) ==
+                        android.content.pm.PackageManager
+                            .PERMISSION_GRANTED
+
+            if (!permissionGranted) {
+
+                drawingWaitingForPermission =
+                    drawing
+
+                bluetoothPermissionLauncher.launch(
+                    permission
+                )
+
+                return
+            }
+        }
+
+        // Permission already available.
+
+        bluetoothStatus =
+            bluetoothManager.getStatus()
+
+        prepareDrawingForOled(
+            context = context,
+            drawing = drawing,
+            bluetoothManager =
+                bluetoothManager
+        )
+    }
+
+    // =========================================================
     // RELOAD DRAWINGS
     // =========================================================
 
@@ -67,6 +202,9 @@ fun MyDrawingsScreen(
 
         drawings =
             DrawingStorage.getAllDrawings(context)
+
+        bluetoothStatus =
+            bluetoothManager.getStatus()
     }
 
     // =========================================================
@@ -74,6 +212,7 @@ fun MyDrawingsScreen(
     // =========================================================
 
     Column(
+
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0B0B0F))
@@ -90,9 +229,10 @@ fun MyDrawingsScreen(
         // =====================================================
 
         Box(
+
             modifier = Modifier
                 .fillMaxWidth()
-                .height(72.dp)
+                .height(82.dp)
         ) {
 
             // -------------------------------------------------
@@ -100,10 +240,13 @@ fun MyDrawingsScreen(
             // -------------------------------------------------
 
             TextButton(
+
                 onClick = onBack,
-                modifier = Modifier.align(
-                    Alignment.CenterStart
-                )
+
+                modifier =
+                    Modifier.align(
+                        Alignment.CenterStart
+                    )
             ) {
 
                 Text("← Back")
@@ -114,15 +257,18 @@ fun MyDrawingsScreen(
             // -------------------------------------------------
 
             Column(
-                modifier = Modifier.align(
-                    Alignment.Center
-                ),
+
+                modifier =
+                    Modifier.align(
+                        Alignment.Center
+                    ),
 
                 horizontalAlignment =
                     Alignment.CenterHorizontally
             ) {
 
                 Text(
+
                     text = "My Drawings",
 
                     style =
@@ -142,6 +288,7 @@ fun MyDrawingsScreen(
                 )
 
                 Text(
+
                     text =
                         "${drawings.size} saved drawing" +
                                 if (drawings.size == 1)
@@ -162,6 +309,15 @@ fun MyDrawingsScreen(
                     textAlign =
                         TextAlign.Center
                 )
+
+                Spacer(
+                    modifier =
+                        Modifier.height(3.dp)
+                )
+
+                BluetoothStatusText(
+                    status = bluetoothStatus
+                )
             }
         }
 
@@ -177,6 +333,7 @@ fun MyDrawingsScreen(
         if (drawings.isEmpty()) {
 
             Box(
+
                 modifier =
                     Modifier.fillMaxSize(),
 
@@ -185,12 +342,15 @@ fun MyDrawingsScreen(
             ) {
 
                 Column(
+
                     horizontalAlignment =
                         Alignment.CenterHorizontally
                 ) {
 
                     Text(
-                        text = "No drawings yet",
+
+                        text =
+                            "No drawings yet",
 
                         style =
                             MaterialTheme
@@ -206,6 +366,7 @@ fun MyDrawingsScreen(
                     )
 
                     Text(
+
                         text =
                             "Create something on the canvas\n" +
                                     "and save it here.",
@@ -261,11 +422,23 @@ fun MyDrawingsScreen(
                         drawing = drawing,
 
                         onOpen = {
-                            onOpenDrawing(drawing)
+
+                            onOpenDrawing(
+                                drawing
+                            )
+                        },
+
+                        onSendToOled = {
+
+                            sendDrawingToOled(
+                                drawing
+                            )
                         },
 
                         onDelete = {
-                            drawingToDelete = drawing
+
+                            drawingToDelete =
+                                drawing
                         }
                     )
                 }
@@ -282,15 +455,21 @@ fun MyDrawingsScreen(
         AlertDialog(
 
             onDismissRequest = {
+
                 drawingToDelete = null
             },
 
             title = {
-                Text("Delete Drawing?")
+
+                Text(
+                    "Delete Drawing?"
+                )
             },
 
             text = {
+
                 Text(
+
                     "Are you sure you want to delete " +
                             "\"${drawing.name}\"?"
                 )
@@ -324,6 +503,7 @@ fun MyDrawingsScreen(
                 TextButton(
 
                     onClick = {
+
                         drawingToDelete = null
                     }
                 ) {
@@ -335,14 +515,189 @@ fun MyDrawingsScreen(
     }
 }
 
-// ============================================================
+// =============================================================
+// PREPARE DRAWING FOR OLED
+// =============================================================
+
+private fun prepareDrawingForOled(
+    context: android.content.Context,
+    drawing: SavedDrawing,
+    bluetoothManager: BluetoothManager
+) {
+
+    val status =
+        bluetoothManager.getStatus()
+
+    when (status) {
+
+        BluetoothStatus.NOT_SUPPORTED -> {
+
+            Toast.makeText(
+                context,
+                "Bluetooth is not supported on this device.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        BluetoothStatus.PERMISSION_REQUIRED -> {
+
+            Toast.makeText(
+                context,
+                "Bluetooth permission is required.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        BluetoothStatus.BLUETOOTH_OFF -> {
+
+            Toast.makeText(
+                context,
+                "Please turn on Bluetooth first.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        BluetoothStatus.NOT_CONNECTED -> {
+
+            /*
+             * We don't have the STM32/Bluetooth hardware yet.
+             *
+             * We can still generate the OLED frame.
+             */
+
+            val oledFrame =
+                OledDataEncoder.encode(
+                    drawing.pixels
+                )
+
+            Toast.makeText(
+                context,
+                "OLED frame ready: ${oledFrame.size} bytes. No OLED connected.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        BluetoothStatus.CONNECTED -> {
+
+            /*
+             * Actual Bluetooth transmission will be
+             * implemented after we choose the hardware.
+             */
+
+            val oledFrame =
+                OledDataEncoder.encode(
+                    drawing.pixels
+                )
+
+            Toast.makeText(
+                context,
+                "OLED frame ready: ${oledFrame.size} bytes.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+}
+
+// =============================================================
+// BLUETOOTH STATUS
+// =============================================================
+
+@Composable
+private fun BluetoothStatusText(
+    status: BluetoothStatus
+) {
+
+    val text: String
+    val statusColor: Color
+
+    when (status) {
+
+        BluetoothStatus.NOT_SUPPORTED -> {
+
+            text =
+                "● Bluetooth not supported"
+
+            statusColor =
+                MaterialTheme
+                    .colorScheme
+                    .error
+        }
+
+        BluetoothStatus.PERMISSION_REQUIRED -> {
+
+            text =
+                "● Bluetooth permission required"
+
+            statusColor =
+                MaterialTheme
+                    .colorScheme
+                    .error
+        }
+
+        BluetoothStatus.BLUETOOTH_OFF -> {
+
+            text =
+                "● Bluetooth is off"
+
+            statusColor =
+                MaterialTheme
+                    .colorScheme
+                    .error
+        }
+
+        BluetoothStatus.NOT_CONNECTED -> {
+
+            text =
+                "● OLED not connected"
+
+            statusColor =
+                MaterialTheme
+                    .colorScheme
+                    .onSurfaceVariant
+        }
+
+        BluetoothStatus.CONNECTED -> {
+
+            text =
+                "● OLED connected"
+
+            statusColor =
+                MaterialTheme
+                    .colorScheme
+                    .primary
+        }
+    }
+
+    Text(
+
+        text = text,
+
+        style =
+            MaterialTheme
+                .typography
+                .labelSmall,
+
+        color =
+            statusColor,
+
+        textAlign =
+            TextAlign.Center
+    )
+}
+
+// =============================================================
 // DRAWING CARD
-// ============================================================
+// =============================================================
 
 @Composable
 private fun DrawingCard(
+
     drawing: SavedDrawing,
+
     onOpen: () -> Unit,
+
+    onSendToOled: () -> Unit,
+
     onDelete: () -> Unit
 ) {
 
@@ -353,6 +708,7 @@ private fun DrawingCard(
 
         colors =
             CardDefaults.cardColors(
+
                 containerColor =
                     Color(0xFF17171D)
             ),
@@ -363,152 +719,219 @@ private fun DrawingCard(
             )
     ) {
 
-        Row(
+        Column(
 
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
-
-            verticalAlignment =
-                Alignment.CenterVertically
+                    .padding(12.dp)
         ) {
 
             // =================================================
-            // DRAWING PREVIEW
+            // PREVIEW + INFORMATION
             // =================================================
 
-            DrawingPreview(
-
-                pixels =
-                    drawing.pixels,
+            Row(
 
                 modifier =
-                    Modifier
-                        .width(110.dp)
-                        .aspectRatio(2f)
-            )
+                    Modifier.fillMaxWidth(),
+
+                verticalAlignment =
+                    Alignment.CenterVertically
+            ) {
+
+                DrawingPreview(
+
+                    pixels =
+                        drawing.pixels,
+
+                    modifier =
+                        Modifier
+                            .width(110.dp)
+                            .aspectRatio(2f)
+                )
+
+                Spacer(
+                    modifier =
+                        Modifier.width(14.dp)
+                )
+
+                Column(
+
+                    modifier =
+                        Modifier.weight(1f)
+                ) {
+
+                    Text(
+
+                        text =
+                            drawing.name,
+
+                        style =
+                            MaterialTheme
+                                .typography
+                                .titleMedium,
+
+                        color =
+                            Color.White
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(5.dp)
+                    )
+
+                    Text(
+
+                        text =
+                            "128 × 64 OLED",
+
+                        style =
+                            MaterialTheme
+                                .typography
+                                .bodySmall,
+
+                        color =
+                            MaterialTheme
+                                .colorScheme
+                                .primary
+                    )
+
+                    Spacer(
+                        modifier =
+                            Modifier.height(2.dp)
+                    )
+
+                    Text(
+
+                        text =
+                            "${drawing.pixels.size} pixels",
+
+                        style =
+                            MaterialTheme
+                                .typography
+                                .bodySmall,
+
+                        color =
+                            MaterialTheme
+                                .colorScheme
+                                .onSurfaceVariant
+                    )
+                }
+            }
 
             Spacer(
                 modifier =
-                    Modifier.width(14.dp)
+                    Modifier.height(12.dp)
             )
 
             // =================================================
-            // DRAWING INFORMATION
+            // THREE EQUAL BUTTONS
             // =================================================
 
-            Column(
+            Row(
+
                 modifier =
-                    Modifier.weight(1f)
+                    Modifier.fillMaxWidth(),
+
+                horizontalArrangement =
+                    Arrangement.spacedBy(8.dp),
+
+                verticalAlignment =
+                    Alignment.CenterVertically
             ) {
 
-                Text(
-                    text =
-                        drawing.name,
+                Button(
 
-                    style =
-                        MaterialTheme
-                            .typography
-                            .titleMedium,
+                    onClick =
+                        onOpen,
 
-                    color = Color.White
-                )
-
-                Spacer(
                     modifier =
-                        Modifier.height(5.dp)
-                )
+                        Modifier.weight(1f),
 
-                Text(
-                    text =
-                        "128 × 64 OLED",
-
-                    style =
-                        MaterialTheme
-                            .typography
-                            .bodySmall,
-
-                    color =
-                        MaterialTheme
-                            .colorScheme
-                            .primary
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(2.dp)
-                )
-
-                Text(
-                    text =
-                        "${drawing.pixels.size} pixels",
-
-                    style =
-                        MaterialTheme
-                            .typography
-                            .bodySmall,
-
-                    color =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurfaceVariant
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(8.dp)
-                )
-
-                // =================================================
-                // ACTIONS
-                // =================================================
-
-                Row(
-                    horizontalArrangement =
-                        Arrangement.spacedBy(6.dp)
+                    contentPadding =
+                        PaddingValues(
+                            horizontal = 4.dp
+                        )
                 ) {
 
-                    Button(
+                    Text(
+                        text = "Open",
+                        maxLines = 1
+                    )
+                }
 
-                        onClick = onOpen,
+                Button(
 
-                        contentPadding =
-                            PaddingValues(
-                                horizontal = 14.dp
-                            ),
+                    onClick =
+                        onSendToOled,
 
-                        colors =
-                            ButtonDefaults.buttonColors(
-                                containerColor =
-                                    MaterialTheme
-                                        .colorScheme
-                                        .primary
-                            )
-                    ) {
+                    modifier =
+                        Modifier.weight(1f),
 
-                        Text("Open")
-                    }
+                    colors =
+                        ButtonDefaults.buttonColors(
 
-                    TextButton(
-                        onClick = onDelete
-                    ) {
+                            containerColor =
+                                MaterialTheme
+                                    .colorScheme
+                                    .secondary
+                        ),
 
-                        Text("Delete")
-                    }
+                    contentPadding =
+                        PaddingValues(
+                            horizontal = 4.dp
+                        )
+                ) {
+
+                    Text(
+                        text = "Send to OLED",
+                        maxLines = 1
+                    )
+                }
+
+                Button(
+
+                    onClick =
+                        onDelete,
+
+                    modifier =
+                        Modifier.weight(1f),
+
+                    colors =
+                        ButtonDefaults.buttonColors(
+
+                            containerColor =
+                                MaterialTheme
+                                    .colorScheme
+                                    .error
+                        ),
+
+                    contentPadding =
+                        PaddingValues(
+                            horizontal = 4.dp
+                        )
+                ) {
+
+                    Text(
+                        text = "Delete",
+                        maxLines = 1
+                    )
                 }
             }
         }
     }
 }
 
-// ============================================================
+// =============================================================
 // DRAWING PREVIEW
-// ============================================================
+// =============================================================
 
 @Composable
 private fun DrawingPreview(
+
     pixels: Set<Int>,
+
     modifier: Modifier = Modifier
 ) {
 
@@ -524,6 +947,7 @@ private fun DrawingPreview(
     ) {
 
         Canvas(
+
             modifier =
                 Modifier.fillMaxSize()
         ) {
@@ -546,19 +970,24 @@ private fun DrawingPreview(
 
                 drawRect(
 
-                    color = Color.White,
+                    color =
+                        Color.White,
 
                     topLeft =
                         androidx.compose.ui.geometry
                             .Offset(
+
                                 x * pixelWidth,
+
                                 y * pixelHeight
                             ),
 
                     size =
                         androidx.compose.ui.geometry
                             .Size(
+
                                 pixelWidth,
+
                                 pixelHeight
                             )
                 )
