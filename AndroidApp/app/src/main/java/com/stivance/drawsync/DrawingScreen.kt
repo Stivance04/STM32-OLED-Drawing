@@ -23,6 +23,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateSetOf
@@ -34,6 +35,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.floor
@@ -44,8 +47,13 @@ private const val OLED_HEIGHT = 64
 @Composable
 fun DrawingScreen(
     modifier: Modifier = Modifier,
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    initialPixels: Set<Int> = emptySet(),
+    existingDrawingId: String? = null,
+    existingDrawingName: String? = null
 ) {
+
+    val context = LocalContext.current
 
     // =========================================================
     // ACTIVE PIXELS
@@ -56,7 +64,20 @@ fun DrawingScreen(
     }
 
     // =========================================================
-    // UNDO / REDO HISTORY
+    // LOAD SAVED DRAWING
+    // =========================================================
+
+    LaunchedEffect(existingDrawingId) {
+
+        activePixels.clear()
+
+        activePixels.addAll(
+            initialPixels
+        )
+    }
+
+    // =========================================================
+    // UNDO / REDO
     // =========================================================
 
     val undoHistory = remember {
@@ -88,11 +109,13 @@ fun DrawingScreen(
     }
 
     var drawingName by remember {
-        mutableStateOf("")
+        mutableStateOf(
+            existingDrawingName ?: ""
+        )
     }
 
     // =========================================================
-    // SAVE CURRENT STATE FOR UNDO
+    // SAVE UNDO STATE
     // =========================================================
 
     fun saveUndoState() {
@@ -105,7 +128,6 @@ fun DrawingScreen(
             undoHistory.removeAt(0)
         }
 
-        // A new action clears redo history.
         redoHistory.clear()
     }
 
@@ -117,18 +139,12 @@ fun DrawingScreen(
         x: Int,
         y: Int
     ): Int {
+
         return y * OLED_WIDTH + x
     }
 
     // =========================================================
     // APPLY PIXEL
-    //
-    // Brush is centered around the cursor.
-    //
-    // 1 px = 1×1
-    // 2 px = 2×2
-    // 3 px = 3×3
-    // 4 px = 4×4
     // =========================================================
 
     fun applyPixel(
@@ -208,7 +224,10 @@ fun DrawingScreen(
 
         while (true) {
 
-            applyPixel(x, y)
+            applyPixel(
+                x,
+                y
+            )
 
             if (
                 x == endX &&
@@ -239,10 +258,16 @@ fun DrawingScreen(
     // =========================================================
 
     Column(
+
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0B0B0F))
-            .padding(16.dp),
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = 24.dp,
+                bottom = 16.dp
+            ),
 
         horizontalAlignment =
             Alignment.CenterHorizontally
@@ -252,41 +277,70 @@ fun DrawingScreen(
         // HEADER
         // =====================================================
 
-        Row(
-            modifier =
-                Modifier.fillMaxWidth(),
-
-            verticalAlignment =
-                Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp)
         ) {
 
+            // -------------------------------------------------
+            // BACK BUTTON
+            // -------------------------------------------------
+
             TextButton(
-                onClick = onBack
+                onClick = onBack,
+
+                modifier =
+                    Modifier.align(
+                        Alignment.CenterStart
+                    )
             ) {
 
-                Text("Back")
+                Text("← Back")
             }
 
-            Spacer(
-                modifier =
-                    Modifier.width(8.dp)
-            )
+            // -------------------------------------------------
+            // CENTERED TITLE
+            // -------------------------------------------------
 
-            Column {
+            Column(
+
+                modifier =
+                    Modifier.align(
+                        Alignment.Center
+                    ),
+
+                horizontalAlignment =
+                    Alignment.CenterHorizontally
+            ) {
 
                 Text(
-                    text = "Create",
+
+                    text =
+                        existingDrawingName
+                            ?: "Create",
 
                     style =
                         MaterialTheme
                             .typography
                             .headlineMedium,
 
-                    color = Color.White
+                    color =
+                        Color.White,
+
+                    textAlign =
+                        TextAlign.Center
+                )
+
+                Spacer(
+                    modifier =
+                        Modifier.height(2.dp)
                 )
 
                 Text(
-                    text = "128 × 64 OLED",
+
+                    text =
+                        "128 × 64 OLED",
 
                     style =
                         MaterialTheme
@@ -296,7 +350,10 @@ fun DrawingScreen(
                     color =
                         MaterialTheme
                             .colorScheme
-                            .primary
+                            .primary,
+
+                    textAlign =
+                        TextAlign.Center
                 )
             }
         }
@@ -311,6 +368,7 @@ fun DrawingScreen(
         // =====================================================
 
         Box(
+
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f)
@@ -322,6 +380,7 @@ fun DrawingScreen(
         ) {
 
             Canvas(
+
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(
@@ -335,7 +394,7 @@ fun DrawingScreen(
                         detectDragGestures(
 
                             // ---------------------------------
-                            // START STROKE
+                            // START DRAWING
                             // ---------------------------------
 
                             onDragStart = { position ->
@@ -363,8 +422,6 @@ fun DrawingScreen(
                                 lastX = x
                                 lastY = y
 
-                                // Save one state for
-                                // the entire stroke.
                                 saveUndoState()
 
                                 applyPixel(
@@ -374,7 +431,7 @@ fun DrawingScreen(
                             },
 
                             // ---------------------------------
-                            // CONTINUE STROKE
+                            // CONTINUE DRAWING
                             // ---------------------------------
 
                             onDrag = { change, _ ->
@@ -402,8 +459,10 @@ fun DrawingScreen(
                                     ).toInt()
 
                                 drawLine(
+
                                     startX = lastX,
                                     startY = lastY,
+
                                     endX = x,
                                     endY = y
                                 )
@@ -423,7 +482,10 @@ fun DrawingScreen(
                     size.height /
                             OLED_HEIGHT
 
-                // Only draw active pixels.
+                // ---------------------------------------------
+                // DRAW ACTIVE PIXELS
+                // ---------------------------------------------
+
                 for (id in activePixels) {
 
                     val x =
@@ -434,7 +496,8 @@ fun DrawingScreen(
 
                     drawRect(
 
-                        color = Color.White,
+                        color =
+                            Color.White,
 
                         topLeft =
                             Offset(
@@ -462,6 +525,7 @@ fun DrawingScreen(
         // =====================================================
 
         Text(
+
             text =
                 "${activePixels.size} / 8192 pixels",
 
@@ -482,28 +546,23 @@ fun DrawingScreen(
         )
 
         // =====================================================
-        // ROW 1
         // UNDO / REDO / ERASER
         // =====================================================
 
         Row(
+
             modifier =
                 Modifier.fillMaxWidth(),
 
             horizontalArrangement =
-                Arrangement.spacedBy(
-                    8.dp
-                ),
+                Arrangement.spacedBy(8.dp),
 
             verticalAlignment =
                 Alignment.CenterVertically
         ) {
 
-            // -------------------------
-            // UNDO
-            // -------------------------
-
             Button(
+
                 modifier =
                     Modifier.weight(1f),
 
@@ -537,11 +596,8 @@ fun DrawingScreen(
                 Text("↩ Undo")
             }
 
-            // -------------------------
-            // REDO
-            // -------------------------
-
             Button(
+
                 modifier =
                     Modifier.weight(1f),
 
@@ -575,11 +631,8 @@ fun DrawingScreen(
                 Text("↪ Redo")
             }
 
-            // -------------------------
-            // ERASER
-            // -------------------------
-
             Button(
+
                 modifier =
                     Modifier.weight(1f),
 
@@ -591,6 +644,7 @@ fun DrawingScreen(
             ) {
 
                 Text(
+
                     if (eraserEnabled)
                         "Eraser ✓"
                     else
@@ -605,11 +659,11 @@ fun DrawingScreen(
         )
 
         // =====================================================
-        // ROW 2
         // BRUSH SIZE
         // =====================================================
 
         Text(
+
             text =
                 "Brush Size: $brushSize px",
 
@@ -618,7 +672,8 @@ fun DrawingScreen(
                     .typography
                     .bodyMedium,
 
-            color = Color.White
+            color =
+                Color.White
         )
 
         Slider(
@@ -636,7 +691,8 @@ fun DrawingScreen(
             valueRange =
                 1f..4f,
 
-            steps = 2,
+            steps =
+                2,
 
             modifier =
                 Modifier.fillMaxWidth()
@@ -648,7 +704,6 @@ fun DrawingScreen(
         )
 
         // =====================================================
-        // ROW 3
         // CLEAR DRAWING
         // =====================================================
 
@@ -663,8 +718,6 @@ fun DrawingScreen(
                     activePixels.isNotEmpty()
                 ) {
 
-                    // Save the drawing first,
-                    // so Clear can be undone.
                     saveUndoState()
 
                     activePixels.clear()
@@ -681,7 +734,6 @@ fun DrawingScreen(
         )
 
         // =====================================================
-        // ROW 4
         // SAVE DRAWING
         // =====================================================
 
@@ -692,13 +744,21 @@ fun DrawingScreen(
 
             onClick = {
 
-                drawingName = ""
+                drawingName =
+                    existingDrawingName ?: ""
 
-                showSaveDialog = true
+                showSaveDialog =
+                    true
             }
         ) {
 
-            Text("Save Drawing")
+            Text(
+
+                if (existingDrawingId != null)
+                    "Save Changes"
+                else
+                    "Save Drawing"
+            )
         }
 
         // =====================================================
@@ -717,7 +777,13 @@ fun DrawingScreen(
 
                 title = {
 
-                    Text("Save Drawing")
+                    Text(
+
+                        if (existingDrawingId != null)
+                            "Save Changes"
+                        else
+                            "Save Drawing"
+                    )
                 },
 
                 text = {
@@ -740,13 +806,6 @@ fun DrawingScreen(
                             Text(
                                 "Drawing name"
                             )
-                        },
-
-                        placeholder = {
-
-                            Text(
-                                "My Drawing"
-                            )
                         }
                     )
                 },
@@ -762,18 +821,43 @@ fun DrawingScreen(
 
                         onClick = {
 
-                            /*
-                             * Actual permanent storage
-                             * will be connected next.
-                             *
-                             * We already have:
-                             *
-                             * drawingName
-                             * activePixels
-                             *
-                             * so the storage component
-                             * can save both.
-                             */
+                            val cleanName =
+                                drawingName.trim()
+
+                            // ---------------------------------
+                            // UPDATE EXISTING DRAWING
+                            // ---------------------------------
+
+                            if (
+                                existingDrawingId != null
+                            ) {
+
+                                DrawingStorage
+                                    .deleteDrawing(
+
+                                        context =
+                                            context,
+
+                                        drawingId =
+                                            existingDrawingId
+                                    )
+                            }
+
+                            // ---------------------------------
+                            // SAVE DRAWING
+                            // ---------------------------------
+
+                            DrawingStorage.saveDrawing(
+
+                                context =
+                                    context,
+
+                                name =
+                                    cleanName,
+
+                                pixels =
+                                    activePixels.toSet()
+                            )
 
                             showSaveDialog =
                                 false

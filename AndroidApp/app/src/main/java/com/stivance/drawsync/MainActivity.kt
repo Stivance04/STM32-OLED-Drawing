@@ -2,6 +2,7 @@ package com.stivance.drawsync
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,7 +17,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,36 +39,135 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
+
             DrawSyncTheme {
+
                 DrawSyncApp()
             }
         }
     }
 }
 
+// ============================================================
+// MAIN APP NAVIGATION
+// ============================================================
+
 @Composable
 fun DrawSyncApp() {
 
-    var showDrawingScreen by remember {
-        mutableStateOf(false)
+    var currentScreen by remember {
+        mutableStateOf("home")
     }
 
-    if (showDrawingScreen) {
+    // The drawing currently selected from My Drawings.
+    var selectedDrawing by remember {
+        mutableStateOf<SavedDrawing?>(null)
+    }
 
-        DrawingScreen(
-            modifier = Modifier.fillMaxSize()
-        )
+    when (currentScreen) {
 
-    } else {
+        // =====================================================
+        // HOME
+        // =====================================================
 
-        HomeScreen(
-            onStartDrawing = {
-                showDrawingScreen = true
+        "home" -> {
+
+            HomeScreen(
+
+                onStartDrawing = {
+
+                    // New drawing = no selected drawing.
+                    selectedDrawing = null
+
+                    currentScreen =
+                        "drawing"
+                },
+
+                onMyDrawings = {
+
+                    currentScreen =
+                        "my_drawings"
+                }
+            )
+        }
+
+        // =====================================================
+        // DRAWING SCREEN
+        // =====================================================
+
+        "drawing" -> {
+
+            // Android system Back.
+            BackHandler {
+
+                selectedDrawing = null
+
+                currentScreen =
+                    "home"
             }
-        )
+
+            DrawingScreen(
+
+                modifier =
+                    Modifier.fillMaxSize(),
+
+                onBack = {
+
+                    selectedDrawing = null
+
+                    currentScreen =
+                        "home"
+                },
+
+                // If a saved drawing was selected,
+                // send its pixels to the canvas.
+                initialPixels =
+                    selectedDrawing?.pixels
+                        ?: emptySet(),
+
+                existingDrawingId =
+                    selectedDrawing?.id,
+
+                existingDrawingName =
+                    selectedDrawing?.name
+            )
+        }
+
+        // =====================================================
+        // MY DRAWINGS
+        // =====================================================
+
+        "my_drawings" -> {
+
+            // Android system Back.
+            BackHandler {
+
+                currentScreen =
+                    "home"
+            }
+
+            MyDrawingsScreen(
+
+                onBack = {
+
+                    currentScreen =
+                        "home"
+                },
+
+                onOpenDrawing = { drawing ->
+
+                    // Remember the selected drawing.
+                    selectedDrawing =
+                        drawing
+
+                    // Open the drawing editor.
+                    currentScreen =
+                        "drawing"
+                }
+            )
+        }
     }
 }
-
 
 // ============================================================
 // HOME SCREEN
@@ -77,78 +176,142 @@ fun DrawSyncApp() {
 @Composable
 fun HomeScreen(
     onStartDrawing: () -> Unit,
+    onMyDrawings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
 
     Surface(
-        modifier = modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+
+        modifier =
+            modifier.fillMaxSize(),
+
+        color =
+            MaterialTheme
+                .colorScheme
+                .background
     ) {
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp),
+                .padding(
+                    start = 24.dp,
+                    end = 24.dp,
+                    top = 40.dp
+                ),
 
             horizontalAlignment = Alignment.CenterHorizontally,
 
             verticalArrangement = Arrangement.Center
         ) {
 
+            // -------------------------------------------------
+            // APP NAME
+            // -------------------------------------------------
+
             Text(
-                text = "DrawSync",
 
-                style = MaterialTheme.typography.displaySmall,
+                text =
+                    "DrawSync",
 
-                fontWeight = FontWeight.Bold,
+                style =
+                    MaterialTheme
+                        .typography
+                        .displaySmall,
 
-                color = MaterialTheme.colorScheme.onBackground
+                fontWeight =
+                    FontWeight.Bold,
+
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onBackground
             )
 
             Spacer(
-                modifier = Modifier.height(10.dp)
+                modifier =
+                    Modifier.height(10.dp)
             )
 
+            // -------------------------------------------------
+            // TAGLINE
+            // -------------------------------------------------
+
             Text(
-                text = "Turn ideas into pixels.",
 
-                style = MaterialTheme.typography.titleLarge,
+                text =
+                    "Turn ideas into pixels.",
 
-                fontWeight = FontWeight.SemiBold,
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleLarge,
 
-                color = MaterialTheme.colorScheme.primary,
+                fontWeight =
+                    FontWeight.SemiBold,
 
-                textAlign = TextAlign.Center
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .primary,
+
+                textAlign =
+                    TextAlign.Center
             )
 
             Spacer(
-                modifier = Modifier.height(8.dp)
+                modifier =
+                    Modifier.height(8.dp)
             )
 
             Text(
-                text = "Sketch it. Sync it. See it come alive.",
 
-                style = MaterialTheme.typography.bodyLarge,
+                text =
+                    "Sketch it. Sync it. See it come alive.",
 
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyLarge,
 
-                textAlign = TextAlign.Center
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurfaceVariant,
+
+                textAlign =
+                    TextAlign.Center
             )
 
             Spacer(
-                modifier = Modifier.height(36.dp)
+                modifier =
+                    Modifier.height(36.dp)
             )
+
+            // -------------------------------------------------
+            // MAIN CARD
+            // -------------------------------------------------
 
             Card(
-                modifier = Modifier.fillMaxWidth(),
 
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
+                modifier =
+                    Modifier.fillMaxWidth(),
 
-                elevation = CardDefaults.cardElevation(
-                    defaultElevation = 6.dp
-                )
+                colors =
+                    CardDefaults.cardColors(
+
+                        containerColor =
+                            MaterialTheme
+                                .colorScheme
+                                .surfaceVariant
+                    ),
+
+                elevation =
+                    CardDefaults.cardElevation(
+
+                        defaultElevation =
+                            6.dp
+                    )
             ) {
 
                 Column(
@@ -157,94 +320,154 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .padding(22.dp),
 
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment =
+                        Alignment.CenterHorizontally
                 ) {
 
+                    // -----------------------------------------
+                    // READY TO CREATE
+                    // -----------------------------------------
+
                     Text(
-                        text = "Ready to Create?",
 
-                        style = MaterialTheme.typography.titleLarge,
+                        text =
+                            "Ready to Create?",
 
-                        fontWeight = FontWeight.SemiBold,
+                        style =
+                            MaterialTheme
+                                .typography
+                                .titleLarge,
 
-                        color = MaterialTheme.colorScheme.onSurface
+                        fontWeight =
+                            FontWeight.SemiBold,
+
+                        color =
+                            MaterialTheme
+                                .colorScheme
+                                .onSurface
                     )
 
                     Spacer(
-                        modifier = Modifier.height(22.dp)
+                        modifier =
+                            Modifier.height(22.dp)
                     )
+
+                    // -----------------------------------------
+                    // START DRAWING
+                    // -----------------------------------------
 
                     Button(
 
-                        onClick = onStartDrawing,
+                        onClick =
+                            onStartDrawing,
 
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier =
+                            Modifier.fillMaxWidth(),
 
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
+                        colors =
+                            ButtonDefaults.buttonColors(
 
-                            contentColor = Color.White
-                        )
+                                containerColor =
+                                    MaterialTheme
+                                        .colorScheme
+                                        .primary,
+
+                                contentColor =
+                                    Color.White
+                            )
                     ) {
 
                         Text(
-                            text = "Start Drawing",
 
-                            fontWeight = FontWeight.SemiBold
+                            text =
+                                "Start Drawing",
+
+                            fontWeight =
+                                FontWeight.SemiBold
                         )
                     }
 
                     Spacer(
-                        modifier = Modifier.height(12.dp)
+                        modifier =
+                            Modifier.height(12.dp)
                     )
+
+                    // -----------------------------------------
+                    // MY DRAWINGS
+                    // -----------------------------------------
 
                     OutlinedButton(
 
-                        onClick = {
-                            // Saved drawings will be implemented later
-                        },
+                        onClick =
+                            onMyDrawings,
 
-                        modifier = Modifier.fillMaxWidth()
+                        modifier =
+                            Modifier.fillMaxWidth()
                     ) {
 
-                        Text("My Drawings")
+                        Text(
+                            "My Drawings"
+                        )
                     }
 
                     Spacer(
-                        modifier = Modifier.height(12.dp)
+                        modifier =
+                            Modifier.height(12.dp)
                     )
+
+                    // -----------------------------------------
+                    // CONNECT OLED
+                    // -----------------------------------------
 
                     OutlinedButton(
 
                         onClick = {
-                            // Bluetooth will be implemented later
+
+                            // Bluetooth will be
+                            // implemented later.
                         },
 
-                        modifier = Modifier.fillMaxWidth()
+                        modifier =
+                            Modifier.fillMaxWidth()
                     ) {
 
-                        Text("Connect OLED")
+                        Text(
+                            "Connect OLED"
+                        )
                     }
                 }
             }
 
             Spacer(
-                modifier = Modifier.height(28.dp)
+                modifier =
+                    Modifier.height(28.dp)
             )
 
+            // -------------------------------------------------
+            // FOOTER
+            // -------------------------------------------------
+
             Text(
-                text = "BY STIVANCE",
 
-                style = MaterialTheme.typography.labelMedium,
+                text =
+                    "BY STIVANCE",
 
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style =
+                    MaterialTheme
+                        .typography
+                        .labelMedium,
 
-                textAlign = TextAlign.Center
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurfaceVariant,
+
+                textAlign =
+                    TextAlign.Center
             )
         }
     }
 }
-
 
 // ============================================================
 // PREVIEW
@@ -260,7 +483,10 @@ fun HomeScreenPreview() {
     DrawSyncTheme {
 
         HomeScreen(
-            onStartDrawing = {}
+
+            onStartDrawing = {},
+
+            onMyDrawings = {}
         )
     }
 }
